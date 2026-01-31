@@ -34,7 +34,7 @@ workflow_status:
   # Phase 3: Solutioning
   create-architecture: "_bmad-output/planning-artifacts/architecture.md"
   create-epics-and-stories: "_bmad-output/planning-artifacts/epics.md"
-  test-design: optional
+  test-design: "_bmad-output/test-design-system.md"
   implementation-readiness: required
 
   # Phase 4: Implementation
