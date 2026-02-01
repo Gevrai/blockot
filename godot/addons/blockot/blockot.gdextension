@@ -1,0 +1,10 @@
+[configuration]
+
+entry_symbol = "gdext_rust_init"
+compatibility_minimum = 4.1
+
+[libraries]
+
+linux.x86_64 = "res://addons/blockot/bin/libblockot.linux.x86_64.so"
+windows.x86_64 = "res://addons/blockot/bin/blockot.windows.x86_64.dll"
+macos.universal = "res://addons/blockot/bin/libblockot.macos.universal.dylib"

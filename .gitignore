@@ -1,0 +1,11 @@
+# Rust build artifacts
+rust/target/
+
+# Compiled Godot plugin libraries
+godot/addons/blockot/bin/
+
+# Godot cache directory
+.godot/
+
+# Godot-generated resource UIDs
+*.gdextension.uid
