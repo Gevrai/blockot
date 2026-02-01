@@ -1,0 +1,96 @@
+# generated: 2026-02-01
+# project: blockot
+# project_key: blockot
+# tracking_system: file-system
+# story_location: _bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-02-01
+project: blockot
+project_key: blockot
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+
+development_status:
+  # Epic 1: Foundation — First Editable Geometry
+  epic-1: in-progress
+  1-1-initialize-rust-gdext-project: ready-for-dev
+  1-2-create-blockotnode-with-default-cube-and-undo-integration: backlog
+  1-3-implement-save-load-serialization: backlog
+  epic-1-retrospective: optional
+
+  # Epic 2: Edit Mode & Selection
+  epic-2: backlog
+  2-1-enter-and-exit-edit-mode: backlog
+  2-2-vertex-selection: backlog
+  2-3-edge-selection: backlog
+  2-4-face-selection: backlog
+  2-5-selection-mode-switching: backlog
+  2-6-multi-select-and-deselect-all: backlog
+  epic-2-retrospective: optional
+
+  # Epic 3: Transform Tools + Undo + Grid Snap
+  epic-3: backlog
+  3-1-move-tool: backlog
+  3-2-rotate-tool: backlog
+  3-3-scale-tool: backlog
+  3-4-grid-snapping: backlog
+  3-5-full-undo-redo-integration: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: Distribution & CI Pipeline
+  epic-4: backlog
+  4-1-github-actions-ci-pipeline: backlog
+  4-2-cross-platform-build-pipeline: backlog
+  4-3-installation-documentation: backlog
+  epic-4-retrospective: optional
+
+  # Epic 5: Geometry Operations
+  epic-5: backlog
+  5-1-extrude-faces: backlog
+  5-2-cut-bisect-tool: backlog
+  epic-5-retrospective: optional
+
+  # Epic 6: Advanced Snapping
+  epic-6: backlog
+  6-1-proximity-snapping: backlog
+  6-2-snap-toggle-with-shift: backlog
+  6-3-configurable-grid-size: backlog
+  epic-6-retrospective: optional
+
+  # Epic 7: Primitives & Properties
+  epic-7: backlog
+  7-1-plane-primitive: backlog
+  7-2-cylinder-primitive: backlog
+  7-3-sphere-primitive: backlog
+  7-4-face-direction-property: backlog
+  7-5-collision-toggle: backlog
+  epic-7-retrospective: optional
