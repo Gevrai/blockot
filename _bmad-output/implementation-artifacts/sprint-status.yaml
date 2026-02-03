@@ -43,7 +43,7 @@ development_status:
   # Epic 1: Foundation — First Editable Geometry
   epic-1: in-progress
   1-1-initialize-rust-gdext-project: review
-  1-2-create-blockotnode-with-default-cube-and-undo-integration: backlog
+  1-2-create-blockotnode-with-default-cube-and-undo-integration: done
   1-3-implement-save-load-serialization: backlog
   epic-1-retrospective: optional
 

@@ -1,5 +1,14 @@
-use godot::prelude::*;
 use godot::init::InitStage;
+use godot::prelude::*;
+
+// Core modules (pure Rust)
+pub mod error;
+pub mod geometry;
+pub mod test_utils;
+pub mod tools;
+
+// Editor module (Godot integration)
+pub mod editor;
 
 struct BlockotExtension;
 
