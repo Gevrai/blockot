@@ -7,12 +7,14 @@
 
 use godot::classes::mesh::ArrayType;
 use godot::classes::mesh::PrimitiveType;
+use godot::classes::notify::Node3DNotification;
 use godot::classes::{
     ArrayMesh, Engine, IMeshInstance3D, Material, MeshInstance3D, Object, StandardMaterial3D,
 };
 use godot::prelude::*;
 
 use crate::geometry::primitives::unit_cube;
+use crate::geometry::serialization::{from_packed_arrays, to_packed_arrays};
 use crate::geometry::BlockotGeometry;
 
 /// A custom node for blockout geometry editing.
@@ -28,6 +30,23 @@ pub struct BlockotNode {
     /// Cached default material
     #[var]
     default_material: Option<Gd<Material>>,
+
+    // Export fields for serialization (saved in .tscn files)
+    // These are synced to/from geometry on save/load.
+    // Format is git-diffable (text-based PackedArrays).
+    // [Source: architecture.md#Decision-5-Flat-Array-Serialization]
+
+    /// Serialized vertex positions
+    #[export]
+    vertices: PackedVector3Array,
+
+    /// Number of vertices per face (e.g., [4,4,4,4,4,4] for 6 quads)
+    #[export]
+    face_vertex_counts: PackedInt32Array,
+
+    /// Flattened vertex indices for all faces
+    #[export]
+    face_indices: PackedInt32Array,
 }
 
 #[godot_api]
@@ -35,12 +54,23 @@ impl IMeshInstance3D for BlockotNode {
     fn init(base: Base<MeshInstance3D>) -> Self {
         Self {
             base,
-            geometry: unit_cube(),
+            geometry: BlockotGeometry::new(), // Start empty, load in ready()
             default_material: None,
+            vertices: PackedVector3Array::new(),
+            face_vertex_counts: PackedInt32Array::new(),
+            face_indices: PackedInt32Array::new(),
         }
     }
 
     fn ready(&mut self) {
+        // Load from export fields if available, otherwise init with cube
+        if !self.vertices.is_empty() {
+            self.load_geometry_from_export();
+        } else {
+            self.geometry = unit_cube();
+            self.sync_geometry_to_export(); // Populate export fields
+        }
+
         self.setup_default_material();
         self.rebuild_array_mesh();
         godot_print!(
@@ -55,6 +85,13 @@ impl IMeshInstance3D for BlockotNode {
         // Per architecture.md "External Modification Pattern":
         // - Preview should be cancelled on scene exit
         // - Implement when preview system is added (Epic 2)
+    }
+
+    fn on_notification(&mut self, what: Node3DNotification) {
+        // Sync geometry to export fields before scene is saved
+        if what == Node3DNotification::EDITOR_PRE_SAVE {
+            self.sync_geometry_to_export();
+        }
     }
 }
 
@@ -257,5 +294,37 @@ impl BlockotNode {
     /// Get read access to geometry.
     pub fn geometry(&self) -> &BlockotGeometry {
         &self.geometry
+    }
+
+    /// Sync internal geometry to export fields (called before save).
+    /// This populates the #[export] fields that get saved to .tscn files.
+    fn sync_geometry_to_export(&mut self) {
+        let (verts, counts, indices) = to_packed_arrays(&self.geometry);
+        self.vertices = verts;
+        self.face_vertex_counts = counts;
+        self.face_indices = indices;
+
+        // Notify Godot that export properties changed so they get saved
+        self.base_mut().notify_property_list_changed();
+    }
+
+    /// Load geometry from export fields (called on scene load).
+    /// Restores BlockotGeometry from the saved PackedArrays.
+    fn load_geometry_from_export(&mut self) {
+        if let Some(geo) = from_packed_arrays(
+            &self.vertices,
+            &self.face_vertex_counts,
+            &self.face_indices,
+        ) {
+            self.geometry = geo;
+            godot_print!(
+                "BlockotNode: Loaded geometry from saved data ({} vertices, {} faces)",
+                self.geometry.vertices.len(),
+                self.geometry.faces.len()
+            );
+        } else {
+            godot_warn!("BlockotNode: Failed to load geometry from saved data, using default cube");
+            self.geometry = unit_cube();
+        }
     }
 }
