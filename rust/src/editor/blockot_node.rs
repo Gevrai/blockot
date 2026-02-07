@@ -9,7 +9,8 @@ use godot::classes::mesh::ArrayType;
 use godot::classes::mesh::PrimitiveType;
 use godot::classes::notify::Node3DNotification;
 use godot::classes::{
-    ArrayMesh, Engine, IMeshInstance3D, Material, MeshInstance3D, Object, StandardMaterial3D,
+    ArrayMesh, Engine, IMeshInstance3D, ImmediateMesh, Material, MeshInstance3D, Object,
+    StandardMaterial3D,
 };
 use godot::prelude::*;
 
@@ -30,6 +31,13 @@ pub struct BlockotNode {
     /// Cached default material
     #[var]
     default_material: Option<Gd<Material>>,
+
+    /// Whether this node is currently in edit mode
+    #[export]
+    is_in_edit_mode: bool,
+
+    /// MeshInstance3D child used to render vertex handles in edit mode
+    handle_mesh_instance: Option<Gd<MeshInstance3D>>,
 
     // Export fields for serialization (saved in .tscn files)
     // These are synced to/from geometry on save/load.
@@ -56,6 +64,8 @@ impl IMeshInstance3D for BlockotNode {
             base,
             geometry: BlockotGeometry::new(), // Start empty, load in ready()
             default_material: None,
+            is_in_edit_mode: false,
+            handle_mesh_instance: None,
             vertices: PackedVector3Array::new(),
             face_vertex_counts: PackedInt32Array::new(),
             face_indices: PackedInt32Array::new(),
@@ -81,10 +91,11 @@ impl IMeshInstance3D for BlockotNode {
     }
 
     fn exit_tree(&mut self) {
-        // TODO: Cancel any active preview when node exits tree
-        // Per architecture.md "External Modification Pattern":
-        // - Preview should be cancelled on scene exit
-        // - Implement when preview system is added (Epic 2)
+        // Exit edit mode when node leaves the tree
+        if self.is_in_edit_mode {
+            self.is_in_edit_mode = false;
+            self.hide_vertex_handles();
+        }
     }
 
     fn on_notification(&mut self, what: Node3DNotification) {
@@ -97,6 +108,12 @@ impl IMeshInstance3D for BlockotNode {
 
 #[godot_api]
 impl BlockotNode {
+    #[signal]
+    fn edit_mode_entered();
+
+    #[signal]
+    fn edit_mode_exited();
+
     /// Returns the number of vertices in the geometry.
     #[func]
     pub fn get_vertex_count(&self) -> i32 {
@@ -108,6 +125,7 @@ impl BlockotNode {
     pub fn get_face_count(&self) -> i32 {
         self.geometry.faces.len() as i32
     }
+
 
     /// Test method for undo spike - moves a single vertex.
     /// This is temporary for verification, will be removed/replaced in Epic 2.
@@ -181,6 +199,89 @@ impl BlockotNode {
 }
 
 impl BlockotNode {
+    /// Enter edit mode on this node. Shows vertex handles and emits signal.
+    pub fn enter_edit_mode(&mut self) {
+        if self.is_in_edit_mode {
+            return;
+        }
+        self.is_in_edit_mode = true;
+        self.show_vertex_handles();
+        self.base_mut()
+            .emit_signal("edit_mode_entered", &[]);
+        godot_print!("BlockotNode: Entered edit mode");
+    }
+
+    /// Exit edit mode on this node. Hides vertex handles and emits signal.
+    pub fn exit_edit_mode(&mut self) {
+        if !self.is_in_edit_mode {
+            return;
+        }
+        self.is_in_edit_mode = false;
+        self.hide_vertex_handles();
+        self.base_mut()
+            .emit_signal("edit_mode_exited", &[]);
+        godot_print!("BlockotNode: Exited edit mode");
+    }
+
+    /// Create and show vertex handles as small points at each vertex position.
+    fn show_vertex_handles(&mut self) {
+        self.hide_vertex_handles(); // Clean up any existing handles
+
+        let mut immediate_mesh = ImmediateMesh::new_gd();
+
+        // Draw vertex points using small cross shapes for visibility
+        immediate_mesh.surface_begin(PrimitiveType::LINES);
+
+        let handle_color = Color::from_rgb(1.0, 0.5, 0.0); // Orange for visibility
+        let handle_size = 0.03;
+
+        for vertex in &self.geometry.vertices {
+            immediate_mesh.surface_set_color(handle_color);
+
+            // Draw a small 3D cross at each vertex
+            // X axis
+            immediate_mesh.surface_add_vertex(*vertex + Vector3::new(-handle_size, 0.0, 0.0));
+            immediate_mesh.surface_add_vertex(*vertex + Vector3::new(handle_size, 0.0, 0.0));
+            // Y axis
+            immediate_mesh.surface_add_vertex(*vertex + Vector3::new(0.0, -handle_size, 0.0));
+            immediate_mesh.surface_add_vertex(*vertex + Vector3::new(0.0, handle_size, 0.0));
+            // Z axis
+            immediate_mesh.surface_add_vertex(*vertex + Vector3::new(0.0, 0.0, -handle_size));
+            immediate_mesh.surface_add_vertex(*vertex + Vector3::new(0.0, 0.0, handle_size));
+        }
+
+        immediate_mesh.surface_end();
+
+        // Create a MeshInstance3D child to display the handles
+        let mut mesh_instance = MeshInstance3D::new_alloc();
+        mesh_instance.set_mesh(&immediate_mesh);
+
+        // Create an unshaded material so handles are always visible
+        let mut handle_material = StandardMaterial3D::new_gd();
+        handle_material.set_shading_mode(
+            godot::classes::base_material_3d::ShadingMode::UNSHADED,
+        );
+        handle_material.set_flag(
+            godot::classes::base_material_3d::Flags::ALBEDO_FROM_VERTEX_COLOR,
+            true,
+        );
+        handle_material.set_flag(
+            godot::classes::base_material_3d::Flags::DISABLE_DEPTH_TEST,
+            true,
+        );
+        mesh_instance.set_material_override(&handle_material.upcast::<Material>());
+
+        self.base_mut().add_child(&mesh_instance);
+        self.handle_mesh_instance = Some(mesh_instance);
+    }
+
+    /// Remove vertex handle visualization.
+    fn hide_vertex_handles(&mut self) {
+        if let Some(mut mesh_instance) = self.handle_mesh_instance.take() {
+            mesh_instance.queue_free();
+        }
+    }
+
     /// Set up a default material for the mesh.
     fn setup_default_material(&mut self) {
         let mut material = StandardMaterial3D::new_gd();
