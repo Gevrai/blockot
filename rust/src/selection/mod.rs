@@ -7,8 +7,10 @@
 //
 // [Source: architecture.md#Decision-3-Vertex-Canonical-Selection]
 
+pub mod hit_test;
 pub mod modes;
 
+pub use hit_test::find_closest_vertex;
 pub use modes::SelectionMode;
 
 use std::collections::HashSet;
@@ -51,6 +53,23 @@ impl Selection {
     /// Returns true if nothing is selected.
     pub fn is_empty(&self) -> bool {
         self.vertex_indices.is_empty()
+    }
+
+    /// Select a single vertex, clearing any previous selection.
+    ///
+    /// Clears vertex_indices and rendering hints, then inserts the given index.
+    pub fn select_vertex(&mut self, index: usize) {
+        self.clear();
+        self.vertex_indices.insert(index);
+    }
+
+    /// Toggle a vertex in the selection (add if absent, remove if present).
+    ///
+    /// Used for multi-select (Ctrl+click). Does not clear existing selection.
+    pub fn toggle_vertex(&mut self, index: usize) {
+        if !self.vertex_indices.remove(&index) {
+            self.vertex_indices.insert(index);
+        }
     }
 }
 
@@ -118,6 +137,75 @@ mod tests {
         let sel = Selection::default();
         assert!(sel.is_empty());
         assert_eq!(sel.mode, SelectionMode::Vertex);
+    }
+
+    #[test]
+    fn test_select_vertex_clears_previous() {
+        let mut sel = Selection::new(SelectionMode::Vertex);
+        sel.vertex_indices.insert(0);
+        sel.vertex_indices.insert(1);
+        sel.selected_edges.push((0, 1));
+
+        sel.select_vertex(5);
+
+        assert_eq!(sel.vertex_indices.len(), 1);
+        assert!(sel.vertex_indices.contains(&5));
+        assert!(sel.selected_edges.is_empty());
+    }
+
+    #[test]
+    fn test_select_vertex_on_empty() {
+        let mut sel = Selection::new(SelectionMode::Vertex);
+
+        sel.select_vertex(3);
+
+        assert_eq!(sel.vertex_indices.len(), 1);
+        assert!(sel.vertex_indices.contains(&3));
+    }
+
+    #[test]
+    fn test_toggle_vertex_adds_when_absent() {
+        let mut sel = Selection::new(SelectionMode::Vertex);
+
+        sel.toggle_vertex(2);
+
+        assert!(sel.vertex_indices.contains(&2));
+        assert_eq!(sel.vertex_indices.len(), 1);
+    }
+
+    #[test]
+    fn test_toggle_vertex_removes_when_present() {
+        let mut sel = Selection::new(SelectionMode::Vertex);
+        sel.vertex_indices.insert(2);
+
+        sel.toggle_vertex(2);
+
+        assert!(!sel.vertex_indices.contains(&2));
+        assert!(sel.is_empty());
+    }
+
+    #[test]
+    fn test_toggle_vertex_preserves_others() {
+        let mut sel = Selection::new(SelectionMode::Vertex);
+        sel.vertex_indices.insert(0);
+        sel.vertex_indices.insert(1);
+
+        sel.toggle_vertex(2);
+
+        assert_eq!(sel.vertex_indices.len(), 3);
+        assert!(sel.vertex_indices.contains(&0));
+        assert!(sel.vertex_indices.contains(&1));
+        assert!(sel.vertex_indices.contains(&2));
+    }
+
+    #[test]
+    fn test_clear_after_select_vertex() {
+        let mut sel = Selection::new(SelectionMode::Vertex);
+        sel.select_vertex(5);
+        assert!(!sel.is_empty());
+
+        sel.clear();
+        assert!(sel.is_empty());
     }
 
     #[test]

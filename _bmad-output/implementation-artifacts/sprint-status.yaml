@@ -50,7 +50,7 @@ development_status:
   # Epic 2: Edit Mode & Selection
   epic-2: in-progress
   2-1-enter-and-exit-edit-mode: done
-  2-2-vertex-selection: backlog
+  2-2-vertex-selection: done
   2-3-edge-selection: backlog
   2-4-face-selection: backlog
   2-5-selection-mode-switching: backlog

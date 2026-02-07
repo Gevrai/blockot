@@ -17,6 +17,7 @@ use godot::prelude::*;
 use crate::geometry::primitives::unit_cube;
 use crate::geometry::serialization::{from_packed_arrays, to_packed_arrays};
 use crate::geometry::BlockotGeometry;
+use crate::selection::Selection;
 
 /// A custom node for blockout geometry editing.
 /// Extends MeshInstance3D and displays editable geometry.
@@ -27,6 +28,9 @@ pub struct BlockotNode {
 
     /// Source of truth for geometry (pure Rust)
     geometry: BlockotGeometry,
+
+    /// Current selection state (vertex-canonical model)
+    selection: Selection,
 
     /// Cached default material
     #[var]
@@ -63,6 +67,7 @@ impl IMeshInstance3D for BlockotNode {
         Self {
             base,
             geometry: BlockotGeometry::new(), // Start empty, load in ready()
+            selection: Selection::default(),
             default_material: None,
             is_in_edit_mode: false,
             handle_mesh_instance: None,
@@ -199,31 +204,44 @@ impl BlockotNode {
 }
 
 impl BlockotNode {
-    /// Enter edit mode on this node. Shows vertex handles and emits signal.
+    /// Enter edit mode on this node. Clears selection, shows vertex handles, emits signal.
     pub fn enter_edit_mode(&mut self) {
         if self.is_in_edit_mode {
             return;
         }
         self.is_in_edit_mode = true;
+        self.selection.clear();
         self.show_vertex_handles();
         self.base_mut()
             .emit_signal("edit_mode_entered", &[]);
         godot_print!("BlockotNode: Entered edit mode");
     }
 
-    /// Exit edit mode on this node. Hides vertex handles and emits signal.
+    /// Exit edit mode on this node. Clears selection, hides vertex handles, emits signal.
     pub fn exit_edit_mode(&mut self) {
         if !self.is_in_edit_mode {
             return;
         }
         self.is_in_edit_mode = false;
+        self.selection.clear();
         self.hide_vertex_handles();
         self.base_mut()
             .emit_signal("edit_mode_exited", &[]);
         godot_print!("BlockotNode: Exited edit mode");
     }
 
-    /// Create and show vertex handles as small points at each vertex position.
+    /// Get read access to the selection state.
+    pub fn selection(&self) -> &Selection {
+        &self.selection
+    }
+
+    /// Get mutable access to the selection state.
+    pub fn selection_mut(&mut self) -> &mut Selection {
+        &mut self.selection
+    }
+
+    /// Create and show vertex handles as small crosses at each vertex position.
+    /// Selected vertices are drawn in white at 1.5x size, unselected in orange.
     fn show_vertex_handles(&mut self) {
         self.hide_vertex_handles(); // Clean up any existing handles
 
@@ -232,11 +250,16 @@ impl BlockotNode {
         // Draw vertex points using small cross shapes for visibility
         immediate_mesh.surface_begin(PrimitiveType::LINES);
 
-        let handle_color = Color::from_rgb(1.0, 0.5, 0.0); // Orange for visibility
-        let handle_size = 0.03;
+        let unselected_color = Color::from_rgb(1.0, 0.5, 0.0); // Orange
+        let selected_color = Color::from_rgb(1.0, 1.0, 1.0); // White
+        let base_handle_size = 0.03_f32;
 
-        for vertex in &self.geometry.vertices {
-            immediate_mesh.surface_set_color(handle_color);
+        for (i, vertex) in self.geometry.vertices.iter().enumerate() {
+            let is_selected = self.selection.vertex_indices.contains(&i);
+            let color = if is_selected { selected_color } else { unselected_color };
+            let handle_size = if is_selected { base_handle_size * 1.5 } else { base_handle_size };
+
+            immediate_mesh.surface_set_color(color);
 
             // Draw a small 3D cross at each vertex
             // X axis
@@ -273,6 +296,14 @@ impl BlockotNode {
 
         self.base_mut().add_child(&mesh_instance);
         self.handle_mesh_instance = Some(mesh_instance);
+    }
+
+    /// Rebuild vertex handles to reflect current selection state.
+    /// Call this after any selection change.
+    pub fn refresh_vertex_handles(&mut self) {
+        if self.is_in_edit_mode {
+            self.show_vertex_handles();
+        }
     }
 
     /// Remove vertex handle visualization.

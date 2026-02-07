@@ -11,14 +11,17 @@
 
 use godot::classes::editor_plugin::AfterGuiInput;
 use godot::classes::{
-    Camera3D, EditorInterface, EditorPlugin, IEditorPlugin, Input, InputEvent, Object,
+    Camera3D, EditorInterface, EditorPlugin, IEditorPlugin, Input, InputEvent,
+    InputEventMouseButton, Object,
 };
-use godot::global::Key;
+use godot::global::{Key, MouseButton};
 use godot::obj::EngineEnum;
 use godot::prelude::*;
 
 use super::blockot_node::BlockotNode;
 use super::edit_mode::EditModeState;
+use crate::selection::find_closest_vertex;
+use crate::selection::SelectionMode;
 
 /// Editor plugin that provides edit mode for BlockotNode.
 ///
@@ -71,11 +74,33 @@ impl IEditorPlugin for BlockotPlugin {
 
     fn forward_3d_gui_input(
         &mut self,
-        _viewport_camera: Option<Gd<Camera3D>>,
-        _event: Option<Gd<InputEvent>>,
+        viewport_camera: Option<Gd<Camera3D>>,
+        event: Option<Gd<InputEvent>>,
     ) -> i32 {
-        // Tab handling is in process(). This method remains for future
-        // mouse-based interactions (vertex clicking, etc. in Story 2.2+).
+        // Only process when in edit mode with Vertex selection mode
+        if !self.edit_state.is_active() {
+            return AfterGuiInput::PASS.ord();
+        }
+        if self.edit_state.selection_mode() != Some(SelectionMode::Vertex) {
+            return AfterGuiInput::PASS.ord();
+        }
+
+        let Some(event) = event else {
+            return AfterGuiInput::PASS.ord();
+        };
+        let Some(camera) = viewport_camera else {
+            return AfterGuiInput::PASS.ord();
+        };
+
+        // Detect left mouse button press (not release)
+        if let Ok(mb) = event.try_cast::<InputEventMouseButton>() {
+            if mb.is_pressed() && mb.get_button_index() == MouseButton::LEFT {
+                let mouse_pos = mb.get_position();
+                self.handle_vertex_click(&camera, mouse_pos);
+                return AfterGuiInput::STOP.ord();
+            }
+        }
+
         AfterGuiInput::PASS.ord()
     }
 }
@@ -158,6 +183,59 @@ impl BlockotPlugin {
                 }
             }
         }
+    }
+
+    /// Handle a vertex click: project vertices to screen space, find closest, update selection.
+    fn handle_vertex_click(&self, camera: &Gd<Camera3D>, mouse_pos: Vector2) {
+        let Some(node_id) = self.edit_state.active_node_id() else {
+            return;
+        };
+        let Some(instance_id) = InstanceId::try_from_i64(node_id) else {
+            return;
+        };
+        let Ok(obj) = Gd::<Object>::try_from_instance_id(instance_id) else {
+            return;
+        };
+        let Ok(mut node) = obj.try_cast::<BlockotNode>() else {
+            return;
+        };
+
+        let mut bound = node.bind_mut();
+
+        // Get the node's global transform for local-to-world conversion
+        let global_transform = bound.base().get_global_transform();
+
+        // Project each vertex to screen space
+        let screen_positions: Vec<Option<Vector2>> = bound
+            .geometry()
+            .vertices
+            .iter()
+            .map(|v| {
+                let world_pos = global_transform * *v;
+                if camera.is_position_behind(world_pos) {
+                    None
+                } else {
+                    Some(camera.unproject_position(world_pos))
+                }
+            })
+            .collect();
+
+        // Find closest vertex within threshold (15 pixels)
+        const VERTEX_SELECTION_THRESHOLD_PX: f32 = 15.0;
+        let hit = find_closest_vertex(&screen_positions, mouse_pos, VERTEX_SELECTION_THRESHOLD_PX);
+
+        match hit {
+            Some(index) => {
+                bound.selection_mut().select_vertex(index);
+            }
+            None => {
+                // Clicked empty space — deselect all
+                bound.selection_mut().clear();
+            }
+        }
+
+        // Refresh handle rendering to show selection state
+        bound.refresh_vertex_handles();
     }
 
     /// Notify a BlockotNode that it should exit edit mode.
